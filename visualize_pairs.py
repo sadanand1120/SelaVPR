@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 import torch
 from torchvision import transforms
+import matplotlib.pyplot as plt
 
 import parser
 import os
@@ -12,9 +13,9 @@ warnings.filterwarnings('ignore')
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 ###### Modify parameters "match_pattern", "imgpath0" and "imgpath1" according to your needs.
-match_pattern = "dense"  # "dense" for matching dense local features (61*61) ; "coarse" for matching coarse patch tokens (16*16)
-imgpath0 = "./image/img_pair/img0.jpg"
-imgpath1 = "./image/img_pair/img1.jpg"
+match_pattern = "coarse"  # "dense" for matching dense local features (61*61) ; "coarse" for matching coarse patch tokens (16*16)
+imgpath0 = "/robodata/smodak/VPR/SelaVPR/datasets/san_francisco/images/test/database/@0550313.87@4184192.09@10@S@037.80373@-122.42845@14666@00@089@003@@@@@.jpg"
+imgpath1 = "/robodata/smodak/VPR/SelaVPR/datasets/san_francisco/images/test/database/@0550317.74@4184192.67@10@S@037.80373@-122.42841@14667@00@089@003@@@@@.jpg"
 
 args = parser.parse_arguments()
 t = transforms.Compose([transforms.Resize((224, 224)),
@@ -68,13 +69,13 @@ def match_batch_tensor(fm1, fm2, img_size):
         idx2 = max1[i,:][idx1]
         assert idx1.shape==idx2.shape
 
-        ############## Filter the nearest neighbor matches by homography verification ###############
-        ### This is not necessary for VPR and not used in SelaVPR. You can comment these four lines of code
-        thetaGT, mask = cv2.findFundamentalMat(kps[idx1.cpu().numpy()],kps[idx2.cpu().numpy()], cv2.FM_RANSAC,
-                                        ransacReprojThreshold=5)
-        idx1 = idx1[np.where(mask==1)[0]]
-        idx2 = idx2[np.where(mask==1)[0]] 
-        ##############       
+        # ############## Filter the nearest neighbor matches by homography verification ###############
+        # ### This is not necessary for VPR and not used in SelaVPR. You can comment these four lines of code
+        # thetaGT, mask = cv2.findFundamentalMat(kps[idx1.cpu().numpy()],kps[idx2.cpu().numpy()], cv2.FM_RANSAC,
+        #                                 ransacReprojThreshold=5)
+        # idx1 = idx1[np.where(mask==1)[0]]
+        # idx2 = idx2[np.where(mask==1)[0]] 
+        # ##############       
 
         cv_im_one = cv2.resize(cv2.imread(imgpath0),(224,224))
         cv_im_two = cv2.resize(cv2.imread(imgpath1),(224,224))
@@ -104,6 +105,41 @@ model.load_state_dict(state_dict)
 
 patch_feature0 = get_patchfeature(model,imgpath0)
 patch_feature1 = get_patchfeature(model,imgpath1)
+
+def visualize_patch_similarity(p0, p1):
+    """
+    Computes the similarity between corresponding patches of two images using dot product and visualizes it.
+    Args:
+        p0: np.array of shape (16, 16, 1024) - First image patch embeddings (normalized).
+        p1: np.array of shape (16, 16, 1024) - Second image patch embeddings (normalized).
+    """
+    p0 = p0.reshape(16,16,1024)
+    p1 = p1.reshape(16,16,1024)
+    # Convert to NumPy if tensors
+    if isinstance(p0, torch.Tensor):
+        p0 = p0.detach().cpu().numpy()
+    if isinstance(p1, torch.Tensor):
+        p1 = p1.detach().cpu().numpy()
+    # Compute similarity via dot product (cosine similarity since vectors are normalized)
+    similarity_map = np.sum(p0 * p1, axis=-1)  # Shape: (16, 16)
+
+    # Plot similarity heatmap
+    plt.figure(figsize=(6, 6))
+    plt.imshow(similarity_map, cmap="gray", interpolation="nearest")
+    plt.colorbar(label="Similarity Score")
+    plt.title("Patch-wise Similarity Heatmap")
+    plt.axis("off")
+    plt.show()
+
+# patch_feature0 = patch_feature0.reshape(61,61,128)
+# norm = torch.norm(patch_feature0, dim=-1)  # Shape: (16, 16)
+# print("Patch feature 0 shape:",patch_feature0.shape)
+# print(norm.shape)
+# print(norm[0:5,0:5])
+# import ipdb; ipdb.set_trace()
+visualize_patch_similarity(patch_feature0, patch_feature1)
+import sys
+sys.exit()
 
 print("Size of patch tokens:",patch_feature1.shape[1:])
 match_batch_tensor(patch_feature0[0], patch_feature1, img_size=(224,224))
