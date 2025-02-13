@@ -69,7 +69,7 @@ class GeoLocalizationNet(nn.Module):
         x0 = self.LocalAdapt(x0)
         x0 = x0.permute(0, 2, 3, 1)
         local_feature = torch.nn.functional.normalize(x0, p=2, dim=-1)
-        return local_feature, global_feature
+        return local_feature, global_feature, patch_feature
 
 
 def get_backbone(args):

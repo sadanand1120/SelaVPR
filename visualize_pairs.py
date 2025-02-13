@@ -10,10 +10,10 @@ import os
 import network
 import warnings
 warnings.filterwarnings('ignore')
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 ###### Modify parameters "match_pattern", "imgpath0" and "imgpath1" according to your needs.
-match_pattern = "coarse"  # "dense" for matching dense local features (61*61) ; "coarse" for matching coarse patch tokens (16*16)
+match_pattern = "dense"  # "dense" for matching dense local features (61*61) ; "coarse" for matching coarse patch tokens (16*16)
 imgpath0 = "/robodata/smodak/VPR/SelaVPR/datasets/san_francisco/images/test/database/@0550313.87@4184192.09@10@S@037.80373@-122.42845@14666@00@089@003@@@@@.jpg"
 imgpath1 = "/robodata/smodak/VPR/SelaVPR/datasets/san_francisco/images/test/database/@0550317.74@4184192.67@10@S@037.80373@-122.42841@14667@00@089@003@@@@@.jpg"
 

@@ -17,7 +17,7 @@ import network
 import warnings
 warnings.filterwarnings('ignore')
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 ######################################### SETUP #########################################
 args = parser.parse_arguments()
