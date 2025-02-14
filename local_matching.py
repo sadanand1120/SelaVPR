@@ -34,9 +34,9 @@ def match_batch_tensor(fm1, fm2, trainflag, grid_size):
     max1 = torch.argmax(M, dim=1) #(N,l)
     max2 = torch.argmax(M, dim=2) #(N,l)
     m = max2[torch.arange(M.shape[0]).reshape((-1,1)), max1] #(N, l)
-    valid = torch.arange(M.shape[-1]).repeat((M.shape[0],1)).cuda() == m #(N, l) bool
+    valid = torch.arange(M.shape[-1]).repeat((M.shape[0],1)) == m #(N, l) bool
     
-    scores = torch.zeros(fm2.shape[0]).cuda()
+    scores = torch.zeros(fm2.shape[0])
 
     kps = get_keypoints(grid_size)
     for i in range(fm2.shape[0]):
@@ -65,7 +65,7 @@ def local_sim(features_1, features_2, trainflag=False):
         queries = features_1
         preds = features_2
         queries,preds = queries.view(B, H*W, C),preds.view(B, H*W, C)
-        similarity = torch.zeros(B).cuda()
+        similarity = torch.zeros(B)
         for i in range(B):
             query,pred = queries[i],preds[i].unsqueeze(0)
             similarity[i] = match_batch_tensor(query, pred, trainflag, grid_size=(H, W))

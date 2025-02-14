@@ -25,12 +25,13 @@ class SelaVPRminimal:
                                      transforms.ToTensor(),
                                      transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
         self.args = self.get_default_args()
-        self.model = network.GeoLocalizationNet(self.args)
-        self.model = self.model.to(self.args.device)
-        self.model = torch.nn.DataParallel(self.model)
-        state_dict = torch.load(self.args.resume)["model_state_dict"]
-        self.model.load_state_dict(state_dict)
-        self.model.eval()
+        with torch.device(self.args.device):
+            self.model = network.GeoLocalizationNet(self.args)
+            self.model = self.model.to(self.args.device)
+            self.model = torch.nn.DataParallel(self.model)
+            state_dict = torch.load(self.args.resume, map_location=self.args.device)["model_state_dict"]
+            self.model.load_state_dict(state_dict)
+            self.model.eval()
 
     @torch.inference_mode()
     def run_model(self, imgpaths: list):
@@ -51,7 +52,7 @@ class SelaVPRminimal:
                       'dataset_name': 'st_lucia',
                       'datasets_folder': './datasets',
                       'dense_feature_map_size': [61, 61, 128],
-                      'device': 'cuda',
+                      'device': 'cpu',
                       'efficient_ram_testing': False,
                       'epochs_num': 50,
                       'features_dim': 1024,
@@ -115,34 +116,39 @@ class SelaVPRminimal:
         distances, indices = faiss_index.search(query_feat, K)
         return distances, indices
 
-    def match_local_feature(self, query_feat, candidates_feat, indices):
+    def match_local_feature(self, query_feat, candidates_feat, indices, retscores=False):
         query_feat = query_feat.cpu().detach().numpy().reshape(-1, 61, 61, 128)
         candidates_feat = candidates_feat.cpu().detach().numpy().reshape(-1, 61, 61, 128)
-        indices = self.rerank(indices, query_feat, candidates_feat)
-        return indices
+        return self.rerank(indices, query_feat, candidates_feat, retscores=retscores)
 
-    @staticmethod
-    def rerank(predictions, queries_local_features, database_local_features):
-        pred2 = []
-        print("reranking...")
-        for query_index, pred in enumerate(tqdm(predictions)):
-            query_local_features = queries_local_features[query_index]
-            candidates_local_features = database_local_features[pred]
-            query_local_features = torch.Tensor(query_local_features).cuda()
-            candidates_local_features = torch.Tensor(candidates_local_features).cuda()
-            rerank_index = local_sim(query_local_features, candidates_local_features).cpu().numpy().argsort()[::-1]
-            pred2.append(predictions[query_index][rerank_index])
-        return np.array(pred2)
+    @torch.inference_mode()
+    def rerank(self, predictions, queries_local_features, database_local_features, retscores=False):
+        with torch.device(self.args.device):
+            pred2 = []
+            highest_scores = []
+            print("reranking...")
+            for query_index, pred in enumerate(tqdm(predictions)):
+                query_local_features = queries_local_features[query_index]
+                candidates_local_features = database_local_features[pred]
+                query_local_features = torch.Tensor(query_local_features)
+                candidates_local_features = torch.Tensor(candidates_local_features)
+                scores = local_sim(query_local_features, candidates_local_features).cpu().numpy()
+                highest_scores.append(scores.max())
+                rerank_index = scores.argsort()[::-1]
+                pred2.append(predictions[query_index][rerank_index])
+        if retscores:
+            return np.array(pred2), highest_scores
+        else:
+            return np.array(pred2)
 
-    def match_image(self, query_imgpath, candidates_imgpaths):
+    def match_image(self, query_imgpath, candidates_imgpaths, retscores=False):
         all_imgpaths = [query_imgpath] + candidates_imgpaths
         local_feats, global_feats, patch_feats = self.run_model(all_imgpaths)
         query_local_feat, query_global_feat = local_feats[0].squeeze().unsqueeze(0), global_feats[0].squeeze().unsqueeze(0)
         candidates_local_feats, candidates_global_feats = local_feats[1:], global_feats[1:]
         K = 10 if len(candidates_imgpaths) > 10 else len(candidates_imgpaths)
         distances, indices = self.match_global_feature(query_global_feat, candidates_global_feats, K=K)
-        new_indices = self.match_local_feature(query_local_feat, candidates_local_feats, indices)
-        return new_indices
+        return self.match_local_feature(query_local_feat, candidates_local_feats, indices, retscores=retscores)
 
 
 if __name__ == "__main__":
